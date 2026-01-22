@@ -1,6 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form 
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import codeReviewresponse, GithubRepoRequest
+from schemas import codeReviewresponse, GithubRepoRequest, GitHubPRReviewRequest
 from ai_review import review_code
 from utils import extract_code_files
 
@@ -11,9 +12,10 @@ from database import Base, engine
 from auth_routes import router as auth_router
 from models import CodeReview
 import json
+import re
 from database import get_db
 from github_utils import fetch_repo_files
-
+from github_pr_utils import fetch_pr_files
 
 
 SECRET_KEY = "ADITYA"
@@ -165,6 +167,100 @@ def review_github_repo(
     return {
         "type": "github",
         "repo": repo,
+        "total_files": len(results),
+        "files": results
+    }
+
+# delete specific history
+@app.delete("/history/{review_id}")
+def delete_review(
+    review_id: int,
+    current_user: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    review = db.query(CodeReview).filter(
+        CodeReview.id == review_id,
+        CodeReview.user_email == current_user
+    ).first()
+
+    if not review:
+        raise HTTPException(status_code=404, detail="Review Not found")
+    
+    db.delete(review)
+    db.commit()
+
+@app.delete("/history")
+def delete_all(
+    current_user: str = Depends(get_current_user),
+    db : Session = Depends(get_db)
+):
+    db.query(CodeReview).filter(
+        CodeReview.user_email == current_user
+    ).delete()
+
+    db.commit()
+
+    return {"message: all history deleted"}
+
+
+def parse_pr_url(pr_url: str):
+    match = re.match(
+        r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)",
+        pr_url
+    )
+    if not match:
+        return None
+    return match.group(1), match.group(2), int(match.group(3))
+
+
+@app.post("/review/github/pr")
+def review_pull_request(
+    payload: GitHubPRReviewRequest,
+    current_user: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    pr_url = payload.pr_url
+    github_token = payload.github_token 
+    parsed = parse_pr_url(pr_url)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Invalid PR URL")
+    
+    owner, repo, pr_number = parsed
+
+    files = fetch_pr_files(owner=owner, repo=repo, pr_number=pr_number, token=github_token)
+
+    results = {}
+
+    for filename, content in files.items():
+
+        patch = content.get("patch", "no diff available")
+        ai_result = review_code(
+           f"""
+        Review this GitHub Pull Request change carefully.
+
+        DIFF:
+        {patch}
+
+        FULL FILE:
+        {content['code']}
+        """,
+            "go"            
+        )
+        results[filename] = ai_result.get("issues", [])
+
+    db_review = CodeReview(
+        user_email=current_user,
+        file_name=f"{repo} PR #{pr_number}",
+        review_type="github_pr",
+        result_json=json.dumps(results)
+    )
+    db.add(db_review)
+    db.commit()
+
+    return {
+        "type": "github_pr",
+        "repo": repo,
+        "pr_number": pr_number,
         "total_files": len(results),
         "files": results
     }

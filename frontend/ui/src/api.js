@@ -73,3 +73,41 @@ export async function analyzegithubrepo(repourl, githubtoken, token){
   if (!res.ok) throw new Error("GitHub review failed");
   return res.json();
 }
+
+export async function deletehistoryitem(id, token) {
+    const res = await fetch(`${BASE_URL}/history/${id}`, {
+        method: "DELETE",
+        headers: {
+           Authorization: `Bearer ${token}` 
+        }
+    })
+    if (!res.ok) throw new Error("Delete failed");
+}
+
+// delete all history 
+export async function deleteall(token) {
+    const res = await fetch(`${BASE_URL}/history/${id}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+    if (!res.ok) throw new Error("Delete all failed");
+}
+
+export async function analyzepullrequest(pr_url, github_token, token) {
+    const res = await fetch(`${BASE_URL}/review/github/pr`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      pr_url: pr_url,
+      github_token: github_token
+    })
+  });
+
+  if (!res.ok) throw new Error("PR review failed");
+  return res.json();
+}

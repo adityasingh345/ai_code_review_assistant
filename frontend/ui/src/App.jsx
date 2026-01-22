@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { analyzefile, get_history, analyzegithubrepo} from "./api";
+import { analyzefile, get_history, analyzegithubrepo, deleteall, deletehistoryitem, analyzepullrequest} from "./api";
 import FileUpload from "./components/FileUpload";
 import ReviewResult from "./components/ReviewResult";
 import Login from "./Login";
@@ -13,6 +13,8 @@ function App() {
   const [Token, SetToken] = useState(null);
   const [result, SetResult] = useState(null);
   const [loading, SetLoading] = useState(false)
+  
+  const [prurl, setprul] = useState(null)
 
   const [repoUrl, setRepoUrl] = useState("");
   const [githubToken, setGithubToken] = useState("");
@@ -113,17 +115,68 @@ function App() {
           <h3>Review History</h3>
           {history.length === 0 && <p>No past reviews</p>}
           {history.map((h) => (
-            <div key={h.id} style={{ border: "1px solid #ddd", margin: "8px", padding: "8px" }}>
-              <p><strong>{h.file_name}</strong> ({h.review_type})</p>
-              <small>{new Date(h.created_at).toLocaleString()}</small>
-            </div>
-          ))}
+              <div
+                key={h.id}
+                style={{ border: "1px solid #ddd", margin: "8px", padding: "8px" }}
+              >
+                <p>
+                  <strong>{h.file_name}</strong> ({h.review_type})
+                </p>
+                <small>{new Date(h.created_at).toLocaleString()}</small>
+                <br />
+
+                <button
+                  onClick={async () => {
+                    if (!window.confirm("Delete this review?")) return;
+
+                    await deletehistoryitem(h.id, Token);
+                    SetHistory(history.filter(item => item.id !== h.id));
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
         </div>
       )}
+
+      <h3>Review Pull Request</h3>
+
+      <input
+        placeholder="https://github.com/owner/repo/pull/123"
+        onChange={(e) => setprul(e.target.value)}
+      />
+
+      <button
+        onClick={async () => {
+          try {
+            SetLoading(true);
+            const data = await analyzepullrequest(prurl, githubToken, Token);
+            SetResult(data);
+          } catch {
+            alert("PR review failed");
+          } finally {
+            SetLoading(false);
+          }
+        }}
+      >
+        Analyze Pr
+      </button>
 
       <br />
       <button onClick={handleGetHistory}>Get History</button>
       <button onClick={() => SetToken(null)}>Logout</button>
+
+      <button
+        onClick={async () => {
+          if (!window.confirm("delete all history")) return;
+
+          await deleteall(Token);
+          setShowHistory([])
+        }}
+      >
+        Delete all history 
+      </button>
     </div>
   );
 }

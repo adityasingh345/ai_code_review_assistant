@@ -3,7 +3,42 @@
 import requests
 import json
 from config import LLM_API_URL, LLM_MODEL
+import re 
 
+
+def safe_parse_json(text: str):
+    """
+    Extract and safely parse JSON from LLM output.
+    Falls back gracefully if parsing fails.
+    """
+    try:
+        # Try direct parse first
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Try extracting JSON block
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        return {"issues": []}
+
+    json_str = match.group(0)
+
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        # LAST RESORT: return empty but valid structure
+        return {
+            "issues": [
+                {
+                    "issue_type": "ParsingError",
+                    "severity": "Low",
+                    "line_number": None,
+                    "explanation": "AI response could not be parsed reliably.",
+                    "improved_code": None
+                }
+            ]
+        }
 
 def review_code(code: str, language: str):
     prompt = f"""
@@ -62,6 +97,6 @@ CODE TO REVIEW:
     if json_start == -1 or json_end == -1:
         raise ValueError("Invalid JSON returned by LLM")
 
-    parsed_json = json.loads(raw_output[json_start:json_end])
+    parsed_json = safe_parse_json(raw_output)
 
     return parsed_json

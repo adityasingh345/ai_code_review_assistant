@@ -20,6 +20,42 @@ export default function ReviewResult({ result }) {
     );
   }
 
+  if (result.type === "github_pr") {
+  return (
+    <div>
+      <h3>PR Review: #{result.pr_number}</h3>
+      <p>Repository: {result.repo}</p>
+      <p>Total files analyzed: {result.total_files}</p>
+
+      {Object.entries(result.files).map(([filename, issues]) => (
+        <div
+          key={filename}
+          style={{
+            border: "1px solid #444",
+            marginTop: "12px",
+            padding: "10px",
+          }}
+        >
+          <h4>{filename}</h4>
+
+          {issues.length === 0 && (
+            <p style={{ color: "lightgreen" }}>No issues 🎉</p>
+          )}
+
+          {issues.map((issue, idx) => (
+            <div key={idx} style={{ marginBottom: "8px" }}>
+              <strong>
+                {issue.issue_type} ({issue.severity})
+              </strong>
+              <p>{issue.explanation}</p>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
   // single file result
   if (result.type == "single"){

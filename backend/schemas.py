@@ -27,3 +27,7 @@ class codeReviewresponse(BaseModel):
 class GithubRepoRequest(BaseModel):
     repo_url: str
     github_token: Optional[str] = None
+
+class GitHubPRReviewRequest(BaseModel):
+    pr_url: str
+    github_token: Optional[str] = None
